@@ -1,0 +1,11 @@
+# Cartelle di build/install del workspace ROS2 (stanno fuori da src/, ma per sicurezza)
+build/
+install/
+log/
+
+# File temporanei Python
+__pycache__/
+*.pyc
+
+# File di sistema
+.DS_Store

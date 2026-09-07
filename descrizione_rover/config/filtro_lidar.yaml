@@ -1,0 +1,14 @@
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: rimozione_self_hit
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: uni_rover/lidar_link/lidar
+        min_x: -0.45
+        max_x: -0.05
+        min_y: -0.30
+        max_y: 0.30
+        min_z: -1.0
+        max_z: 1.0
+        invert: false
