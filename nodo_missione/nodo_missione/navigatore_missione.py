@@ -8,7 +8,7 @@ from rclpy.parameter import Parameter
 from tf2_ros import Buffer, TransformListener
 from nav2_msgs.action import NavigateToPose
 from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, LaserScan
 from cv_bridge import CvBridge
 import cv2
 
@@ -21,6 +21,7 @@ WAYPOINTS = [
 
 DURATA_SCANSIONE = 20.0
 VELOCITA_ANGOLARE_SCANSIONE = 0.5
+RAGGIO_MASSIMO_NUVOLA_PUNTI = 6.0
 CARTELLA_SCANSIONI = os.path.expanduser('~/rover_ws/scansioni')
 
 
@@ -36,6 +37,11 @@ class NavigatoreMissione(Node):
         self.ultimo_frame = None
         self.create_subscription(Image, '/camera/image', self.callback_camera, 10)
 
+        self.ultimo_scan = None
+        self.scansione_attiva = False
+        self.nuvola_punti_accumulata = []
+        self.create_subscription(LaserScan, '/scan', self.callback_scan, 10)
+
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
@@ -43,7 +49,8 @@ class NavigatoreMissione(Node):
 
         self.indice_waypoint = 0
         self.timer_scansione = None
-        self.yaw_iniziale_scansione = None
+        self.yaw_precedente = None
+        self.rotazione_accumulata_gradi = 0.0
         self.prossima_soglia_foto = 0
         self.soglie_foto_gradi = [0, 90, 180, 270]
 
@@ -54,6 +61,36 @@ class NavigatoreMissione(Node):
 
     def callback_camera(self, msg):
         self.ultimo_frame = msg
+
+    def callback_scan(self, msg):
+        self.ultimo_scan = msg
+        if not self.scansione_attiva:
+            return
+        try:
+            trasformata = self.tf_buffer.lookup_transform(
+                'odom', msg.header.frame_id, rclpy.time.Time()
+            )
+        except Exception:
+            return
+
+        angolo = msg.angle_min
+        for r in msg.ranges:
+            if math.isfinite(r) and msg.range_min <= r <= RAGGIO_MASSIMO_NUVOLA_PUNTI:
+                x_locale = r * math.cos(angolo)
+                y_locale = r * math.sin(angolo)
+                xg, yg, zg = self.trasforma_punto_in_globale(x_locale, y_locale, trasformata)
+                self.nuvola_punti_accumulata.append((xg, yg, zg))
+            angolo += msg.angle_increment
+
+    def trasforma_punto_in_globale(self, x_locale, y_locale, trasformata):
+        tx = trasformata.transform.translation.x
+        ty = trasformata.transform.translation.y
+        tz = trasformata.transform.translation.z
+        q = trasformata.transform.rotation
+        yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        x_globale = tx + x_locale * math.cos(yaw) - y_locale * math.sin(yaw)
+        y_globale = ty + x_locale * math.sin(yaw) + y_locale * math.cos(yaw)
+        return x_globale, y_globale, tz
 
     def leggi_yaw_attuale(self):
         try:
@@ -111,6 +148,8 @@ class NavigatoreMissione(Node):
         self.yaw_precedente = self.leggi_yaw_attuale()
         self.rotazione_accumulata_gradi = 0.0
         self.prossima_soglia_foto = 0
+        self.nuvola_punti_accumulata = []
+        self.scansione_attiva = True
         self.timer_scansione = self.create_timer(0.05, self.callback_scansione)
         self.tempo_inizio_scansione = self.get_clock().now()
 
@@ -122,6 +161,8 @@ class NavigatoreMissione(Node):
         if tempo_trascorso >= DURATA_SCANSIONE:
             self.cmd_vel_pub.publish(Twist())
             self.timer_scansione.cancel()
+            self.scansione_attiva = False
+            self.salva_nuvola_punti()
             self.get_logger().info(
                 f'Scansione al waypoint {self.indice_waypoint + 1} completata.'
             )
@@ -163,6 +204,31 @@ class NavigatoreMissione(Node):
             self.get_logger().info(f'Foto salvata: {nome_file}')
         except Exception as e:
             self.get_logger().error(f'Errore nel salvataggio della foto: {e}')
+
+    def salva_nuvola_punti(self):
+        punti = self.nuvola_punti_accumulata
+        nome_file = os.path.join(
+            CARTELLA_SCANSIONI,
+            f'waypoint_{self.indice_waypoint + 1}_nuvola.pcd'
+        )
+        try:
+            with open(nome_file, 'w') as f:
+                f.write('# .PCD v0.7 - Point Cloud Data file format\n')
+                f.write('VERSION 0.7\n')
+                f.write('FIELDS x y z\n')
+                f.write('SIZE 4 4 4\n')
+                f.write('TYPE F F F\n')
+                f.write('COUNT 1 1 1\n')
+                f.write(f'WIDTH {len(punti)}\n')
+                f.write('HEIGHT 1\n')
+                f.write('VIEWPOINT 0 0 0 1 0 0 0\n')
+                f.write(f'POINTS {len(punti)}\n')
+                f.write('DATA ascii\n')
+                for x, y, z in punti:
+                    f.write(f'{x:.4f} {y:.4f} {z:.4f}\n')
+            self.get_logger().info(f'Nuvola di punti salvata: {nome_file} ({len(punti)} punti)')
+        except Exception as e:
+            self.get_logger().error(f'Errore nel salvataggio della nuvola di punti: {e}')
 
 
 def main():
