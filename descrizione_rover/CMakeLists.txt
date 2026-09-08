@@ -29,6 +29,7 @@ install(DIRECTORY
   launch
   modelli_3d
   config
+  terreno
   DESTINATION share/${PROJECT_NAME}/
 )
 
