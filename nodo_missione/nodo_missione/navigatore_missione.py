@@ -1,6 +1,6 @@
 import math
 import os
-
+import time
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
@@ -11,6 +11,10 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Image, LaserScan
 from cv_bridge import CvBridge
 import cv2
+import csv
+from datetime import datetime
+
+CARTELLA_LOG = os.path.expanduser('~/rover_ws/log_missione')
 
 WAYPOINTS = [
     (-3.0, 1.0),
@@ -46,6 +50,18 @@ class NavigatoreMissione(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         os.makedirs(CARTELLA_SCANSIONI, exist_ok=True)
+        os.makedirs(CARTELLA_LOG, exist_ok=True)
+        timestamp_run = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.file_csv = os.path.join(CARTELLA_LOG, f'run_{timestamp_run}.csv')
+        self.file_testo = os.path.join(CARTELLA_LOG, f'run_{timestamp_run}.txt')
+
+        with open(self.file_csv, 'w', newline='') as f:
+            scrittore = csv.writer(f)
+            scrittore.writerow([
+                'indice_waypoint', 'x', 'y', 'esito', 'tempo_navigazione_s',
+                'numero_recoveries', 'foto_scattate', 'nuvola_salvata',
+                'numero_punti_nuvola', 'errori'
+            ])
 
         self.indice_waypoint = 0
         self.timer_scansione = None
@@ -54,9 +70,12 @@ class NavigatoreMissione(Node):
         self.prossima_soglia_foto = 0
         self.soglie_foto_gradi = [0, 90, 180, 270]
 
+        self.log_evento('Avvio del nodo di missione')
         self.get_logger().info('Nodo di missione avviato, attendo il server di navigazione...')
         self.action_client.wait_for_server()
-        self.get_logger().info('Server di navigazione disponibile, avvio la missione.')
+        self.get_logger().info('Server di navigazione disponibile, attendo stabilizzazione...')
+        time.sleep(5)
+        self.get_logger().info('Avvio la missione.')
         self.invia_prossimo_waypoint()
 
     def callback_camera(self, msg):
@@ -100,10 +119,30 @@ class NavigatoreMissione(Node):
         q = trasformata.transform.rotation
         yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
         return yaw
+    
+    def log_evento(self, messaggio):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        riga = f'[{timestamp}] {messaggio}\n'
+        with open(self.file_testo, 'a') as f:
+            f.write(riga)
+
+    def scrivi_riga_csv(self, x, y, foto_scattate, nuvola_salvata, numero_punti, errori):
+        with open(self.file_csv, 'a', newline='') as f:
+            scrittore = csv.writer(f)
+            scrittore.writerow([
+                self.indice_waypoint + 1, x, y, self.esito_corrente,
+                f'{self.tempo_navigazione_corrente:.1f}',
+                self.numero_recoveries_corrente,
+                foto_scattate, nuvola_salvata, numero_punti, errori
+            ])
+        self.indice_waypoint += 1
+        self.invia_prossimo_waypoint()
 
     def invia_prossimo_waypoint(self):
         if self.indice_waypoint >= len(WAYPOINTS):
             self.get_logger().info('Missione completata: tutti i waypoint raggiunti.')
+            self.log_evento('Missione completata: tutti i waypoint raggiunti.')
+            rclpy.shutdown()
             return
 
         x, y = WAYPOINTS[self.indice_waypoint]
@@ -117,14 +156,27 @@ class NavigatoreMissione(Node):
         self.get_logger().info(
             f'Invio waypoint {self.indice_waypoint + 1}/{len(WAYPOINTS)}: ({x}, {y})'
         )
+        self.log_evento(f'Invio waypoint {self.indice_waypoint + 1}/{len(WAYPOINTS)}: ({x}, {y})')
 
-        future_invio = self.action_client.send_goal_async(goal_msg)
+        self.tempo_inizio_navigazione = self.get_clock().now()
+        self.numero_recoveries_corrente = 0
+        future_invio = self.action_client.send_goal_async(
+            goal_msg, feedback_callback=self.callback_feedback_navigazione
+        )
         future_invio.add_done_callback(self.callback_risposta_goal)
+
+    def callback_feedback_navigazione(self, feedback_msg):
+        self.numero_recoveries_corrente = feedback_msg.feedback.number_of_recoveries
 
     def callback_risposta_goal(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().error('Goal rifiutato dal server di navigazione.')
+            self.log_evento(f'ERRORE: goal rifiutato per il waypoint {self.indice_waypoint + 1}, passo al successivo.')
+            self.esito_corrente = 'rifiutato'
+            self.tempo_navigazione_corrente = 0.0
+            self.numero_recoveries_corrente = 0
+            self.scrivi_riga_csv(*WAYPOINTS[self.indice_waypoint], foto_scattate=0, nuvola_salvata=False, numero_punti=0, errori='goal rifiutato')
             return
 
         future_risultato = goal_handle.get_result_async()
@@ -132,15 +184,30 @@ class NavigatoreMissione(Node):
 
     def callback_risultato_navigazione(self, future):
         stato = future.result().status
+        self.tempo_navigazione_corrente = (
+            self.get_clock().now() - self.tempo_inizio_navigazione
+        ).nanoseconds / 1e9
+
         if stato == 4:
+            self.esito_corrente = 'successo'
             self.get_logger().info(
                 f'Waypoint {self.indice_waypoint + 1} raggiunto con successo. Avvio scansione.'
             )
+            self.log_evento(
+                f'Waypoint {self.indice_waypoint + 1} raggiunto: successo, '
+                f'tempo={self.tempo_navigazione_corrente:.1f}s, recovery={self.numero_recoveries_corrente}'
+            )
             self.avvia_scansione()
         else:
+            self.esito_corrente = f'fallito (stato {stato})'
             self.get_logger().warn(
                 f'Waypoint {self.indice_waypoint + 1} non raggiunto (stato {stato}). Passo al successivo.'
             )
+            self.log_evento(
+                f'Waypoint {self.indice_waypoint + 1} non raggiunto: {self.esito_corrente}, '
+                f'tempo={self.tempo_navigazione_corrente:.1f}s, recovery={self.numero_recoveries_corrente}'
+            )
+            self.scrivi_riga_csv(foto_scattate=0, nuvola_salvata=False, numero_punti=0, errori='')
             self.indice_waypoint += 1
             self.invia_prossimo_waypoint()
 
@@ -148,6 +215,7 @@ class NavigatoreMissione(Node):
         self.yaw_precedente = self.leggi_yaw_attuale()
         self.rotazione_accumulata_gradi = 0.0
         self.prossima_soglia_foto = 0
+        self.foto_scattate_contatore = 0
         self.nuvola_punti_accumulata = []
         self.scansione_attiva = True
         self.timer_scansione = self.create_timer(0.05, self.callback_scansione)
@@ -162,12 +230,11 @@ class NavigatoreMissione(Node):
             self.cmd_vel_pub.publish(Twist())
             self.timer_scansione.cancel()
             self.scansione_attiva = False
-            self.salva_nuvola_punti()
             self.get_logger().info(
                 f'Scansione al waypoint {self.indice_waypoint + 1} completata.'
             )
-            self.indice_waypoint += 1
-            self.invia_prossimo_waypoint()
+            self.log_evento(f'Scansione al waypoint {self.indice_waypoint + 1} completata.')
+            self.salva_nuvola_punti()
             return
 
         comando = Twist()
@@ -202,8 +269,11 @@ class NavigatoreMissione(Node):
             )
             cv2.imwrite(nome_file, immagine_cv)
             self.get_logger().info(f'Foto salvata: {nome_file}')
+            self.foto_scattate_contatore += 1
+            self.log_evento(f'Foto salvata (angolo {angolo_gradi}°): {nome_file}')
         except Exception as e:
             self.get_logger().error(f'Errore nel salvataggio della foto: {e}')
+            self.log_evento(f'ERRORE nel salvataggio della foto (angolo {angolo_gradi}°): {e}')
 
     def salva_nuvola_punti(self):
         punti = self.nuvola_punti_accumulata
@@ -211,6 +281,8 @@ class NavigatoreMissione(Node):
             CARTELLA_SCANSIONI,
             f'waypoint_{self.indice_waypoint + 1}_nuvola.pcd'
         )
+        nuvola_salvata = False
+        errori = ''
         try:
             with open(nome_file, 'w') as f:
                 f.write('# .PCD v0.7 - Point Cloud Data file format\n')
@@ -227,15 +299,27 @@ class NavigatoreMissione(Node):
                 for x, y, z in punti:
                     f.write(f'{x:.4f} {y:.4f} {z:.4f}\n')
             self.get_logger().info(f'Nuvola di punti salvata: {nome_file} ({len(punti)} punti)')
+            self.log_evento(f'Nuvola di punti salvata: {nome_file} ({len(punti)} punti)')
+            nuvola_salvata = True
         except Exception as e:
             self.get_logger().error(f'Errore nel salvataggio della nuvola di punti: {e}')
+            self.log_evento(f'ERRORE nel salvataggio della nuvola di punti: {e}')
+            errori = str(e)
+
+        x, y = WAYPOINTS[self.indice_waypoint]
+        self.scrivi_riga_csv(
+            x, y,
+            foto_scattate=self.foto_scattate_contatore,
+            nuvola_salvata=nuvola_salvata,
+            numero_punti=len(punti),
+            errori=errori
+        )
 
 
 def main():
     rclpy.init()
     nodo = NavigatoreMissione()
     rclpy.spin(nodo)
-    rclpy.shutdown()
 
 
 if __name__ == '__main__':
