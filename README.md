@@ -1,7 +1,7 @@
 # Sviluppo e Simulazione Software per un Rover Planetario Autonomo in Ambito Spaziale
 
 Tesi di laurea triennale in Informatica — Università degli Studi di Camerino
-**Laureando**: Tommaso Leonardi | **Relatrice**: Barbara Re | A.A. 2025/2026
+**Laureando**: Tommaso Leonardi | A.A. 2025/2026
 
 ## Descrizione
 
@@ -28,6 +28,7 @@ Il sistema è organizzato in tre package ROS 2:
 - ROS 2 Jazzy
 - Gazebo Harmonic
 - Nav2
+- RViz2 (versione 14.1.22, inclusa in ROS 2 Jazzy)
 - `laser_filters` (`sudo apt install ros-jazzy-laser-filters`)
 - `cv_bridge`, `opencv-python`
 
@@ -54,6 +55,11 @@ ros2 launch configurazione_nav2 nav2.launch.py
 **Terminale 3 — missione autonoma:**
 ```bash
 ros2 run nodo_missione navigatore_missione
+```
+
+**Terminale 4 — RViz2, per visualizzare LaserScan, costmap e percorso pianificato:**
+```bash
+rviz2 -d ~/rover_ws/rviz_navigazione.rviz
 ```
 
 Il rover naviga in sequenza sui waypoint configurati, eseguendo ad ogni tappa una rotazione di scansione a 360° con acquisizione di 4 fotografie e di una nuvola di punti 3D. I risultati vengono salvati in `~/rover_ws/scansioni/`.
