@@ -1,0 +1,34 @@
+[2026-09-25 20:43:51] Avvio del nodo di missione
+[2026-09-25 20:43:56] Invio waypoint 1/4: (-3.0, 1.0)
+[2026-09-25 20:44:36] Waypoint 1 raggiunto: successo, tempo=15.2s, recovery=0
+[2026-09-25 20:44:36] Foto salvata (angolo 0°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_1_angolo_0.png
+[2026-09-25 20:44:44] Foto salvata (angolo 90°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_1_angolo_90.png
+[2026-09-25 20:44:54] Foto salvata (angolo 180°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_1_angolo_180.png
+[2026-09-25 20:45:01] Foto salvata (angolo 270°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_1_angolo_270.png
+[2026-09-25 20:45:26] Scansione al waypoint 1 completata.
+[2026-09-25 20:45:26] Nuvola di punti salvata: /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_1_nuvola.pcd (13190 punti)
+[2026-09-25 20:45:26] Invio waypoint 2/4: (1.0, -2.8)
+[2026-09-25 20:46:10] Waypoint 2 raggiunto: successo, tempo=18.3s, recovery=0
+[2026-09-25 20:46:10] Foto salvata (angolo 0°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_2_angolo_0.png
+[2026-09-25 20:46:17] Foto salvata (angolo 90°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_2_angolo_90.png
+[2026-09-25 20:46:24] Foto salvata (angolo 180°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_2_angolo_180.png
+[2026-09-25 20:46:34] Foto salvata (angolo 270°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_2_angolo_270.png
+[2026-09-25 20:46:57] Scansione al waypoint 2 completata.
+[2026-09-25 20:46:57] Nuvola di punti salvata: /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_2_nuvola.pcd (14978 punti)
+[2026-09-25 20:46:57] Invio waypoint 3/4: (3.7, -1.8)
+[2026-09-25 20:47:35] Waypoint 3 raggiunto: successo, tempo=15.4s, recovery=1
+[2026-09-25 20:47:35] Foto salvata (angolo 0°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_3_angolo_0.png
+[2026-09-25 20:47:45] Foto salvata (angolo 90°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_3_angolo_90.png
+[2026-09-25 20:47:52] Foto salvata (angolo 180°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_3_angolo_180.png
+[2026-09-25 20:47:59] Foto salvata (angolo 270°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_3_angolo_270.png
+[2026-09-25 20:48:24] Scansione al waypoint 3 completata.
+[2026-09-25 20:48:24] Nuvola di punti salvata: /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_3_nuvola.pcd (17286 punti)
+[2026-09-25 20:48:24] Invio waypoint 4/4: (3.5, 1.4)
+[2026-09-25 20:48:56] Waypoint 4 raggiunto: successo, tempo=13.4s, recovery=0
+[2026-09-25 20:48:56] Foto salvata (angolo 0°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_4_angolo_0.png
+[2026-09-25 20:49:05] Foto salvata (angolo 90°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_4_angolo_90.png
+[2026-09-25 20:49:12] Foto salvata (angolo 180°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_4_angolo_180.png
+[2026-09-25 20:49:19] Foto salvata (angolo 270°): /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_4_angolo_270.png
+[2026-09-25 20:49:45] Scansione al waypoint 4 completata.
+[2026-09-25 20:49:45] Nuvola di punti salvata: /home/tommaso/rover_ws/scansioni/run_20260925_204351/waypoint_4_nuvola.pcd (15031 punti)
+[2026-09-25 20:49:45] Missione completata: tutti i waypoint raggiunti.

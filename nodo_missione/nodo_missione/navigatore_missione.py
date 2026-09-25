@@ -2,6 +2,7 @@ import math
 import os
 import time
 import rclpy
+from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.parameter import Parameter
@@ -54,6 +55,8 @@ class NavigatoreMissione(Node):
         timestamp_run = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.file_csv = os.path.join(CARTELLA_LOG, f'run_{timestamp_run}.csv')
         self.file_testo = os.path.join(CARTELLA_LOG, f'run_{timestamp_run}.txt')
+        self.cartella_scansioni_run = os.path.join(CARTELLA_SCANSIONI, f'run_{timestamp_run}')
+        os.makedirs(self.cartella_scansioni_run, exist_ok=True)
 
         with open(self.file_csv, 'w', newline='') as f:
             scrittore = csv.writer(f)
@@ -75,6 +78,18 @@ class NavigatoreMissione(Node):
         self.action_client.wait_for_server()
         self.get_logger().info('Server di navigazione disponibile, attendo stabilizzazione...')
         time.sleep(5)
+        self.get_logger().info('Attendo un orologio di simulazione valido prima di avviare la missione.')
+        self.timer_avvio = self.create_timer(
+            0.5, self.avvia_missione_se_pronto,
+            clock=Clock(clock_type=ClockType.STEADY_TIME)
+        )
+
+    def avvia_missione_se_pronto(self):
+        # Con use_sim_time attivo, finché non arriva il primo messaggio su /clock
+        # get_clock().now() vale 0: il cronometro del primo waypoint partirebbe da zero.
+        if self.get_clock().now().nanoseconds == 0:
+            return
+        self.timer_avvio.cancel()
         self.get_logger().info('Avvio la missione.')
         self.invia_prossimo_waypoint()
 
@@ -264,7 +279,7 @@ class NavigatoreMissione(Node):
         try:
             immagine_cv = self.bridge_immagini.imgmsg_to_cv2(self.ultimo_frame, desired_encoding='bgr8')
             nome_file = os.path.join(
-                CARTELLA_SCANSIONI,
+                self.cartella_scansioni_run,
                 f'waypoint_{self.indice_waypoint + 1}_angolo_{angolo_gradi}.png'
             )
             cv2.imwrite(nome_file, immagine_cv)
@@ -278,7 +293,7 @@ class NavigatoreMissione(Node):
     def salva_nuvola_punti(self):
         punti = self.nuvola_punti_accumulata
         nome_file = os.path.join(
-            CARTELLA_SCANSIONI,
+            self.cartella_scansioni_run,
             f'waypoint_{self.indice_waypoint + 1}_nuvola.pcd'
         )
         nuvola_salvata = False
